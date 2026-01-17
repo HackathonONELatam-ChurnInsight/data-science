@@ -1,6 +1,7 @@
 import pandas as pd
 import joblib
-from fastapi import FastAPI, HTTPException
+import io
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -42,18 +43,18 @@ except Exception as e:
 
 # --- 3. CONTRATO DE ENTRADA ---
 class CustomerRequest(BaseModel):
-    geography: str
-    gender: str
-    age: int
-    creditScore: int
-    balance: float
-    estimatedSalary: float
-    tenure: int
-    numOfProducts: int
-    satisfactionScore: int
-    isActiveMember: bool
-    hasCrCard: bool
-    complain: bool
+    Geography: str
+    Gender: str
+    Age: int
+    CreditScore: int
+    Balance: float
+    EstimatedSalary: float
+    Tenure: int
+    NumOfProducts: int
+    SatisfactionScore: int
+    IsActiveMember: int
+    HasCrCard: int
+    Complain: int
 
 app = FastAPI(title="Churn Insight API", version="1.0")
 
@@ -70,24 +71,9 @@ def predict_churn(data: CustomerRequest):
     
     try:
         # A. Obtener datos limpios del request
-        req = data.model_dump()
-        
-        # B. Mapeo: JSON (camelCase) -> Modelo ML (PascalCase)
-        # Convertimos automáticamente los booleanos (true/false) a enteros (1/0)
-        input_data = {
-            "Geography": req["geography"],
-            "Gender": req["gender"],
-            "Age": req["age"],
-            "CreditScore": req["creditScore"],
-            "Balance": req["balance"],
-            "EstimatedSalary": req["estimatedSalary"],
-            "Tenure": req["tenure"],
-            "NumOfProducts": req["numOfProducts"],
-            "SatisfactionScore": req["satisfactionScore"],
-            "IsActiveMember": int(req["isActiveMember"]), # true -> 1, false -> 0
-            "HasCrCard": int(req["hasCrCard"]),           # true -> 1, false -> 0
-            "Complain": int(req["complain"])              # true -> 1, false -> 0
-        }
+        # Al definir el modelo con PascalCase, model_dump() generará las claves correctas.
+        # Se asume que el types ya vienen correctos (ints para flags).
+        input_data = data.model_dump()
         
         # Crear DataFrame
         df = pd.DataFrame([input_data])
@@ -96,14 +82,67 @@ def predict_churn(data: CustomerRequest):
         pred_class = int(model.predict(df)[0])
         proba = float(model.predict_proba(df)[0][1])
         
-        # D. Respuesta (Manteniendo el formato que espera el Backend Java)
-        resultado_texto = "Va a cancelar" if pred_class == 1 else "No va a cancelar"
-        
+        # D. Respuesta (Binaria, el backend maneja el texto)
         return {
-            "forecast": resultado_texto,
-            "probability": round(proba, 2)
+            "forecast": pred_class,
+            "probability": proba
         }
         
     except Exception as e:
         print(f"Error procesando solicitud: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# --- 5. ENDPOINT BATCH ---
+@app.post("/predict_batch")
+async def predict_batch(file: UploadFile = File(...)):
+    """
+    Procesa un archivo CSV con múltiples clientes y devuelve las predicciones.
+    El CSV debe contener las columnas: 'Geography', 'Gender', 'Age', 'CreditScore', 
+    'Balance', 'EstimatedSalary', 'Tenure', 'NumOfProducts', 'SatisfactionScore', 
+    'IsActiveMember', 'HasCrCard', 'Complain'.
+    """
+    if not model:
+        raise HTTPException(status_code=500, detail="Modelo no cargado.")
+
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un CSV.")
+
+    try:
+        # Leer el contenido del archivo
+        content = await file.read()
+        df = pd.read_csv(io.BytesIO(content))
+
+        # Columnas requeridas
+        required_columns = {'Geography', 'Gender', 'Age', 'CreditScore', 'Balance', 
+                            'EstimatedSalary', 'Tenure', 'NumOfProducts', 'SatisfactionScore', 
+                            'IsActiveMember', 'HasCrCard', 'Complain'}
+
+        # Validar columnas faltantes
+        if not required_columns.issubset(df.columns):
+            missing = required_columns - set(df.columns)
+            raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en el CSV: {missing}")
+
+        # Realizar predicciones
+        # Nota: Asumimos que los datos vienen en el formato correcto (PascalCase, tipos compatibles)
+        # El pipeline del modelo se encarga de las transformaciones necesarias (FeatureGenerator)
+
+        # Filtrar solo las columnas que el modelo conoce para evitar errores si hay columnas extra (ID, Nombres, etc)
+        # Se mantiene el orden original de las columnas en el CSV
+        columns_for_model = [col for col in df.columns if col in required_columns]
+        df_clean = df[columns_for_model]
+        
+        predictions = model.predict(df_clean)
+        probabilities = model.predict_proba(df_clean)[:, 1] # Probabilidad de la clase 1 (Churn)
+
+        # Anexar resultados al DataFrame ORIGINAL (para devolver también las columnas extra)
+        df['Prediction'] = predictions.astype(int)
+        df['Probability'] = probabilities
+
+        # Convertir a lista de diccionarios (JSON)
+        return df.to_dict(orient='records')
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error procesando lote: {e}")
+        raise HTTPException(status_code=400, detail=f"Error al procesar el archivo CSV: {str(e)}")
