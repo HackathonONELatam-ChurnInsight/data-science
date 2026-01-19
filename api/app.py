@@ -18,8 +18,6 @@ class FeatureGenerator(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X_out = X.copy()
-        if 'Balance' in X_out.columns:
-            X_out['HasBalance'] = (X_out['Balance'] > 0).astype(int)
         for col in ['Geography', 'Gender']:
             if col in X_out.columns:
                 X_out[col] = X_out[col].astype(str).str.title()
@@ -32,8 +30,8 @@ try:
     # Obtiene la ruta absoluta del directorio donde está este archivo (app.py)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     
-    # Combina ese directorio con el nombre de archivo
-    model_path = os.path.join(BASE_DIR, 'churn_model_winner.joblib')
+    # Combina ese directorio con el nombre de archivo (subiendo un nivel a 'model')
+    model_path = os.path.join(BASE_DIR, '..', 'model', 'churn_model_winner.joblib')
     
     model = joblib.load(model_path)
     print(f"Modelo cargado exitosamente desde: {model_path}")
@@ -79,14 +77,12 @@ def predict_churn(data: CustomerRequest):
         df = pd.DataFrame([input_data])
         
         # C. Predicción
-        pred_class = int(model.predict(df)[0])
-        proba = float(model.predict_proba(df)[0][1])
+        # El nuevo modelo devuelve directamente un diccionario con la estructura completa:
+        # { "forecast": int, "probability": float, "feature_importances": [...] }
+        # predict devuelve una lista (uno por fila), tomamos el primero.
+        prediction_result = model.predict(df)[0]
         
-        # D. Respuesta (Binaria, el backend maneja el texto)
-        return {
-            "forecast": pred_class,
-            "probability": proba
-        }
+        return prediction_result
         
     except Exception as e:
         print(f"Error procesando solicitud: {e}")
@@ -131,12 +127,14 @@ async def predict_batch(file: UploadFile = File(...)):
         columns_for_model = [col for col in df.columns if col in required_columns]
         df_clean = df[columns_for_model]
         
-        predictions = model.predict(df_clean)
-        probabilities = model.predict_proba(df_clean)[:, 1] # Probabilidad de la clase 1 (Churn)
+        # El modelo devuelve una lista de diccionarios
+        results = model.predict(df_clean)
 
         # Anexar resultados al DataFrame ORIGINAL (para devolver también las columnas extra)
-        df['Prediction'] = predictions.astype(int)
-        df['Probability'] = probabilities
+        # Extraemos 'forecast' y 'probability' de cada diccionario
+        df['Prediction'] = [res['forecast'] for res in results]
+        df['Probability'] = [res['probability'] for res in results]
+        df['FeatureImportances'] = [res.get('feature_importances') for res in results]
 
         # Convertir a lista de diccionarios (JSON)
         return df.to_dict(orient='records')
