@@ -15,6 +15,20 @@ Para ver el análisis exploratorio, ingeniería de features y métricas del mode
 
 ---
 
+## 📊 Resumen Técnico
+
+*(Sección a completar por el equipo de Data Science)*
+
+- **Modelo Elegido**: [Ej: Regresión Logística]
+- **Métricas Clave**:
+    - Accuracy: [XX]%
+    - Recall: [XX]%
+    - F1-Score: [XX]%
+
+
+
+---
+
 ## 🚀 API y Despliegue
 
 Además del modelado, desarrollamos una **API REST (FastAPI)** para servir el modelo al equipo de Backend y facilitar la integración en tiempo real y batch.
@@ -171,16 +185,4 @@ curl -X POST "http://127.0.0.1:8000/predict" \
     "Complain": 0
   }'
 ```
-
----
-
-## 📊 Resumen Técnico
-
-*(Sección a completar por el equipo de Data Science)*
-
-- **Modelo Elegido**: [Ej: Regresión Logística]
-- **Métricas Clave**:
-    - Accuracy: [XX]%
-    - Recall: [XX]%
-    - F1-Score: [XX]%
 
