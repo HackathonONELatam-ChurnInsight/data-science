@@ -42,6 +42,16 @@ Además del modelado, desarrollamos una **API REST (FastAPI)** para servir el mo
 ### Instalación y Ejecución
 
 1. **Entorno Virtual**: Crear y activar (recomendado).
+   ```bash
+   # Crear entorno virtual
+   python -m venv venv
+
+   # Activar en Windows
+   .\venv\Scripts\activate
+
+   # Activar en macOS/Linux
+   source venv/bin/activate
+   ```
 2. **Dependencias**:
    ```bash
    pip install -r requirements.txt
