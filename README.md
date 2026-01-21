@@ -7,6 +7,28 @@
 
 ---
 
+## 📂 Estructura del Proyecto
+
+A continuación se detalla la organización de archivos y el propósito de cada componente:
+
+```text
+/
+├── api/                        # Código fuente de la API (FastAPI)
+│   ├── app.py                  # Endpoints y configuración de la app
+│   ├── churn_logic.py          # Lógica de predicción y explicabilidad (SHAP)
+│   ├── utils.py                # Funciones auxiliares para serialización
+│   └── test_app.py             # Tests automatizados (pytest)
+├── model/                      # Modelos serializados y metadatos
+│   ├── churn_model_winner.joblib  # Modelo productivo
+│   └── metadata_modelo.joblib     # Umbrales y configuración extra
+├── notebook/                   # Experimentos y entrenamiento
+│   └── Reg_logística_Smote.ipynb  # Notebook de entrenamiento final
+├── requirements.txt            # Dependencias del proyecto
+└── README.md                   # Documentación
+```
+
+---
+
 ## 🏆 Entregable Principal (Notebooks)
 
 Para ver el análisis exploratorio, ingeniería de features y métricas del modelo detalladas, accede al notebook principal:
@@ -17,27 +39,25 @@ Para ver el análisis exploratorio, ingeniería de features y métricas del mode
 
 ## 📊 Resumen Técnico
 
-*(Sección a completar por el equipo de Data Science)*
-
-- **Modelo Elegido**: [Ej: Regresión Logística]
-- **Métricas Clave**:
-    - Accuracy: [XX]%
-    - Recall: [XX]%
-    - F1-Score: [XX]%
-
-
+- **Modelo Elegido**: Regresión Logística con Calibración de Probabilidades y SMOTE para balanceo de clases.
+- **Explicabilidad**: Incorporamos valores SHAP en la API para explicar *por qué* se toma cada decisión a nivel de cliente.
+- **Métricas Clave (Notebook)**:
+    - *Consultar el notebook para los valores exactos, dado que se generan dinámicamente.*
 
 ---
 
 ## 🚀 API y Despliegue
 
-Además del modelado, desarrollamos una **API REST (FastAPI)** para servir el modelo al equipo de Backend y facilitar la integración en tiempo real y batch.
+La API no solo sirve la predicción del modelo `.joblib`, sino que integra una capa de lógica de negocio (`ChurnPredictor`) que:
+1. Reconstruye un explicador **SHAP** en tiempo de ejecución.
+2. Aplica limpieza automática de datos de texto (ej. "france" -> "France").
+3. Carga un umbral de decisión optimizado desde `metadata_modelo.joblib`.
 
 ### Requisitos Técnicos
 
-- Python 3.10+ recomendado
-- Dependencias listadas en `requirements.txt`
-- Archivo de modelo entrenado: `churn_model_winner.joblib` (ubicado en `model/`)
+- Python 3.11 (Probado en 3.11.4)
+- Dependencias clave: `fastapi`, `scikit-learn`, `shap`, `imbalanced-learn`, `joblib`.
+- Consultar `requirements.txt` para la lista completa.
 
 ### Instalación y Ejecución
 
@@ -59,7 +79,7 @@ Además del modelado, desarrollamos una **API REST (FastAPI)** para servir el mo
 3. **Levantar el Servidor**:
    Desde la raíz del proyecto, ejecuta:
    ```bash
-   uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
+   uvicorn api.app:app --reload
    ```
 
 ### Documentación Interactiva
@@ -116,9 +136,16 @@ Incluye predicción, probabilidad y **feature importances** (explicabilidad).
 }
 ```
 
-#### 2. POST `/predict_batch` (Predicción por Lotes)
+#### 2. POST `/predict_batch` (Carga Masiva)
 
-Procesa una lista de clientes enviada a través de un archivo CSV y devuelve los resultados enriquecidos.
+Sube un archivo `.csv` para obtener predicciones de múltiples clientes a la vez.
+
+**Requisitos del CSV:**
+- Debe contener encabezados compatibles (ej: `Geography`, `Age`, `CreditScore`, etc).
+- Se preservan las columnas originales del CSV en la respuesta.
+
+**Respuesta:**
+- Retorna JSON con la lista de objetos, donde cada objeto incluye los datos originales más `Prediction`, `Probability`, y `FeatureImportances` (ranking de impacto).
 
 - **Tipo de contenido**: `multipart/form-data`
 - **Parámetro**: `file` (archivo `.csv`)

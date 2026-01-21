@@ -7,6 +7,13 @@ from pydantic import BaseModel
 from sklearn.base import BaseEstimator, TransformerMixin
 import os
 import sys
+from api.churn_logic import ChurnPredictor # Importamos la nueva lógica
+
+# Importar función utilitaria requerida por el modelo (Mantener por compatibilidad de joblib)
+try:
+    from api.utils import to_int_01
+except ImportError:
+    from utils import to_int_01
 
 # --- 1. CLASE TRANSFORMADORA ---
 class FeatureGenerator(BaseEstimator, TransformerMixin):
@@ -24,20 +31,20 @@ class FeatureGenerator(BaseEstimator, TransformerMixin):
         return X_out
 # Asignamos la clase al módulo __main__ para que joblib la encuentre
 sys.modules['__main__'].FeatureGenerator = FeatureGenerator
+sys.modules['__main__'].to_int_01 = to_int_01
 
 # --- 2. CARGAR MODELO ---
+predictor = None
 try:
-    # Obtiene la ruta absoluta del directorio donde está este archivo (app.py)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    
-    # Combina ese directorio con el nombre de archivo (subiendo un nivel a 'model')
     model_path = os.path.join(BASE_DIR, '..', 'model', 'churn_model_winner.joblib')
     
-    model = joblib.load(model_path)
-    print(f"Modelo cargado exitosamente desde: {model_path}")
+    # Inicializar la lógica compleja
+    predictor = ChurnPredictor(model_path)
+    print(f"Lógica de predicción cargada exitosamente desde: {model_path}")
 except Exception as e:
-    print(f"Error al cargar el modelo: {e}")
-    model = None
+    print(f"Error al cargar el modelo/predictor: {e}")
+    predictor = None
 
 # --- 3. CONTRATO DE ENTRADA ---
 class CustomerRequest(BaseModel):
@@ -64,23 +71,21 @@ def main():
 # --- 4. ENDPOINT ---
 @app.post("/predict")
 def predict_churn(data: CustomerRequest):
-    if not model:
+    if not predictor:
         raise HTTPException(status_code=500, detail="Modelo no cargado.")
     
     try:
         # A. Obtener datos limpios del request
-        # Al definir el modelo con PascalCase, model_dump() generará las claves correctas.
-        # Se asume que el types ya vienen correctos (ints para flags).
         input_data = data.model_dump()
         
-        # Crear DataFrame
-        df = pd.DataFrame([input_data])
-        
-        # C. Predicción
-        # El nuevo modelo devuelve directamente un diccionario con la estructura completa:
-        # { "forecast": int, "probability": float, "feature_importances": [...] }
-        # predict devuelve una lista (uno por fila), tomamos el primero.
-        prediction_result = model.predict(df)[0]
+        # A.1 Aplicar FeatureGenerator (Limpieza de datos: Título)
+        feat_gen = FeatureGenerator()
+        df_wrapper = pd.DataFrame([input_data])
+        df_clean = feat_gen.transform(df_wrapper)
+        input_data_clean = df_clean.to_dict(orient='records')[0]
+
+        # B. Usar el predictor avanzado con datos limpios
+        prediction_result = predictor.predict(input_data_clean)
         
         return prediction_result
         
@@ -92,12 +97,9 @@ def predict_churn(data: CustomerRequest):
 @app.post("/predict_batch")
 async def predict_batch(file: UploadFile = File(...)):
     """
-    Procesa un archivo CSV con múltiples clientes y devuelve las predicciones.
-    El CSV debe contener las columnas: 'Geography', 'Gender', 'Age', 'CreditScore', 
-    'Balance', 'EstimatedSalary', 'Tenure', 'NumOfProducts', 'SatisfactionScore', 
-    'IsActiveMember', 'HasCrCard', 'Complain'.
+    Procesa un archivo CSV con múltiples clientes y devuelve las predicciones detalladas.
     """
-    if not model:
+    if not predictor:
         raise HTTPException(status_code=500, detail="Modelo no cargado.")
 
     if not file.filename.endswith('.csv'):
@@ -118,23 +120,25 @@ async def predict_batch(file: UploadFile = File(...)):
             missing = required_columns - set(df.columns)
             raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en el CSV: {missing}")
 
+        # Aplicar FeatureGenerator (Limpieza de datos: Título)
+        feat_gen = FeatureGenerator()
+        df = feat_gen.transform(df)
+
         # Realizar predicciones
-        # Nota: Asumimos que los datos vienen en el formato correcto (PascalCase, tipos compatibles)
-        # El pipeline del modelo se encarga de las transformaciones necesarias (FeatureGenerator)
-
-        # Filtrar solo las columnas que el modelo conoce para evitar errores si hay columnas extra (ID, Nombres, etc)
-        # Se mantiene el orden original de las columnas en el CSV
-        columns_for_model = [col for col in df.columns if col in required_columns]
-        df_clean = df[columns_for_model]
+        results = []
+        df_dict = df.to_dict(orient='records')
         
-        # El modelo devuelve una lista de diccionarios
-        results = model.predict(df_clean)
+        for record in df_dict:
+            # Procesamos uno por uno para obtener el detalle de SHAP
+            # (Esto puede ser lento para archivos grandes, pero garantiza el contrato completo)
+            pred = predictor.predict(record)
+            results.append(pred)
 
-        # Anexar resultados al DataFrame ORIGINAL (para devolver también las columnas extra)
-        # Extraemos 'forecast' y 'probability' de cada diccionario
+        # Anexar resultados al DataFrame ORIGINAL
         df['Prediction'] = [res['forecast'] for res in results]
         df['Probability'] = [res['probability'] for res in results]
-        df['FeatureImportances'] = [res.get('feature_importances') for res in results]
+        # Guardamos el JSON de importancias como string o estructura
+        df['FeatureImportances'] = [res['feature_importances'] for res in results]
 
         # Convertir a lista de diccionarios (JSON)
         return df.to_dict(orient='records')

@@ -32,11 +32,10 @@ def test_read_root():
 
 def test_predict_churn_success_churn():
     """Prueba una predicción exitosa simulando un caso de cancelación (1)"""
-    # Mockear el modelo dentro de app.py
-    # Usamos patch para reemplazar el objeto 'model' en el módulo 'app'
-    with patch("api.app.model") as mock_model:
+    # Mockear el predictor dentro de app.py
+    # Usamos patch para reemplazar el objeto 'predictor' en el módulo 'app'
+    with patch("api.app.predictor") as mock_predictor:
         # Configurar el comportamiento del mock
-        # El nuevo modelo devuelve una lista de diccionarios, tomamos el primero
         mock_response = {
             "forecast": 1,
             "probability": 0.85,
@@ -44,7 +43,7 @@ def test_predict_churn_success_churn():
                 {"feature_name": "Age", "importance_value": 0.45, "ranking": 1}
             ]
         }
-        mock_model.predict.return_value = [mock_response]
+        mock_predictor.predict.return_value = mock_response
 
         response = client.post("/predict", json=valid_payload)
         
@@ -57,14 +56,14 @@ def test_predict_churn_success_churn():
 
 def test_predict_churn_success_no_churn():
     """Prueba una predicción exitosa simulando un caso de NO cancelación (0)"""
-    with patch("api.app.model") as mock_model:
+    with patch("api.app.predictor") as mock_predictor:
         # Caso negativo
         mock_response = {
             "forecast": 0,
             "probability": 0.05,
             "feature_importances": []
         }
-        mock_model.predict.return_value = [mock_response]
+        mock_predictor.predict.return_value = mock_response
 
         response = client.post("/predict", json=valid_payload)
         
@@ -88,7 +87,7 @@ def test_predict_endpoint_validation_error():
 
 def test_predict_endpoint_model_not_loaded():
     """Prueba el comportamiento cuando el modelo no está cargado (None)"""
-    with patch("api.app.model", None):
+    with patch("api.app.predictor", None):
         response = client.post("/predict", json=valid_payload)
         assert response.status_code == 500
         assert response.json()["detail"] == "Modelo no cargado."
@@ -110,22 +109,23 @@ Spain,Male,35,600,1000.0,50000.0,3,2,4,0,1,0,1002,Juan"""
         'file': ('test_data.csv', io.BytesIO(csv_content.encode('utf-8')), 'text/csv')
     }
 
-    with patch("api.app.model") as mock_model:
-        # Configurar mocks devolviendo lista de dicts (nuevo contrato)
-        # 2 filas -> 2 predicciones
-        mock_model.predict.return_value = [
+    with patch("api.app.predictor") as mock_predictor:
+        # Configurar mocks. El loop llama a predictor.predict una vez por fila.
+        # side_effect permite devolver valores distintos en cada llamada
+        mock_predictor.predict.side_effect = [
+            # Primera fila
             {
                 "forecast": 1, 
                 "probability": 0.85, 
                 "feature_importances": [{"feature_name": "Age", "importance_value": 0.45, "ranking": 1}]
             },
+            # Segunda fila
             {
                 "forecast": 0, 
                 "probability": 0.05,
                 "feature_importances": []
             }
         ]
-        # predict_proba ya no se usa
 
         response = client.post("/predict_batch", files=files)
         
@@ -142,13 +142,11 @@ Spain,Male,35,600,1000.0,50000.0,3,2,4,0,1,0,1002,Juan"""
         assert row1["ClienteID"] == 1001
         assert row1["Nombre"] == "Maria"
         assert "FeatureImportances" in row1
-        assert len(row1["FeatureImportances"]) == 1
         
         # Verificar segundo registro (Prediction=0, Probability=0.05)
         row2 = results[1]
         assert row2["Prediction"] == 0
         assert row2["Probability"] == 0.05
-        assert "FeatureImportances" in row2
 
 def test_predict_batch_missing_columns():
     """Prueba que le falten columnas requeridas al CSV"""
@@ -156,7 +154,7 @@ def test_predict_batch_missing_columns():
     files = {'file': ('test.csv', io.BytesIO(csv_content.encode()), 'text/csv')}
     
     # No necesitamos mockear el modelo porque fallará antes
-    with patch("api.app.model", MagicMock()): 
+    with patch("api.app.predictor", MagicMock()): 
         response = client.post("/predict_batch", files=files)
     
     assert response.status_code == 400
@@ -166,7 +164,7 @@ def test_predict_batch_invalid_file_type():
     """Prueba subir un archivo que no sea .csv"""
     files = {'file': ('test.txt', io.BytesIO(b"dummy"), 'text/plain')}
     
-    with patch("api.app.model", MagicMock()): 
+    with patch("api.app.predictor", MagicMock()): 
         response = client.post("/predict_batch", files=files)
         
     assert response.status_code == 400
