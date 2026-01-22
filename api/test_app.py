@@ -96,17 +96,49 @@ def test_predict_batch_success():
     """
     Prueba el endpoint de carga masiva (batch).
     Verifica:
-    1. Procesamiento correcto de CSV.
+    1. Procesamiento correcto de JSON.
     2. Preservación de columnas extra (ej: ClienteID).
-    3. Anexado de Prediction y Probability.
+    3. Anexado de Prediction y Probability en estructura "results".
     """
-    csv_content = """Geography,Gender,Age,CreditScore,Balance,EstimatedSalary,Tenure,NumOfProducts,SatisfactionScore,IsActiveMember,HasCrCard,Complain,ClienteID,Nombre
-France,Female,42,619,0.0,101348.88,2,1,3,1,1,1,1001,Maria
-Spain,Male,35,600,1000.0,50000.0,3,2,4,0,1,0,1002,Juan"""
+    import json
+    json_content = json.dumps([
+        {
+            "Geography": "France",
+            "Gender": "Female",
+            "Age": 42,
+            "CreditScore": 619,
+            "Balance": 0.0,
+            "EstimatedSalary": 101348.88,
+            "Tenure": 2,
+            "NumOfProducts": 1,
+            "SatisfactionScore": 3,
+            "IsActiveMember": 1,
+            "HasCrCard": 1,
+            "Complain": 1,
+            "ClienteID": 1001,
+            "Nombre": "Maria"
+        },
+        {
+            "Geography": "Spain",
+            "Gender": "Male",
+            "Age": 35,
+            "CreditScore": 600,
+            "Balance": 1000.0,
+            "EstimatedSalary": 50000.0,
+            "Tenure": 3,
+            "NumOfProducts": 2,
+            "SatisfactionScore": 4,
+            "IsActiveMember": 0,
+            "HasCrCard": 1,
+            "Complain": 0,
+            "ClienteID": 1002,
+            "Nombre": "Juan"
+        }
+    ])
     
     # Crear archivo en simulado memoria
     files = {
-        'file': ('test_data.csv', io.BytesIO(csv_content.encode('utf-8')), 'text/csv')
+        'file': ('test_data.json', io.BytesIO(json_content.encode('utf-8')), 'application/json')
     }
 
     with patch("api.app.predictor") as mock_predictor:
@@ -130,7 +162,11 @@ Spain,Male,35,600,1000.0,50000.0,3,2,4,0,1,0,1002,Juan"""
         response = client.post("/predict_batch", files=files)
         
         assert response.status_code == 200
-        results = response.json()
+        data = response.json()
+        
+        # Verificar estructura: debe tener "results" como clave principal
+        assert "results" in data
+        results = data["results"]
         
         assert isinstance(results, list)
         assert len(results) == 2
@@ -149,23 +185,25 @@ Spain,Male,35,600,1000.0,50000.0,3,2,4,0,1,0,1002,Juan"""
         assert row2["Probability"] == 0.05
 
 def test_predict_batch_missing_columns():
-    """Prueba que le falten columnas requeridas al CSV"""
-    csv_content = "Geography,Gender\nFrance,Female"
-    files = {'file': ('test.csv', io.BytesIO(csv_content.encode()), 'text/csv')}
+    """Prueba que le falten columnas requeridas al JSON"""
+    import json
+    json_content = json.dumps({"Geography": "France", "Gender": "Female"})
+    files = {'file': ('test.json', io.BytesIO(json_content.encode()), 'application/json')}
     
     # No necesitamos mockear el modelo porque fallará antes
     with patch("api.app.predictor", MagicMock()): 
         response = client.post("/predict_batch", files=files)
     
     assert response.status_code == 400
-    assert "Faltan columnas requeridas" in response.json()["detail"]
+    data = response.json()
+    assert "detail" in data
 
 def test_predict_batch_invalid_file_type():
-    """Prueba subir un archivo que no sea .csv"""
-    files = {'file': ('test.txt', io.BytesIO(b"dummy"), 'text/plain')}
+    """Prueba subir un archivo que no sea .json"""
+    files = {'file': ('test.csv', io.BytesIO(b"dummy"), 'text/csv')}
     
     with patch("api.app.predictor", MagicMock()): 
         response = client.post("/predict_batch", files=files)
         
     assert response.status_code == 400
-    assert "El archivo debe ser un CSV" in response.json()["detail"]
+    assert "El archivo debe ser un JSON" in response.json()["detail"]

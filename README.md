@@ -138,41 +138,55 @@ Incluye predicción, probabilidad y **feature importances** (explicabilidad).
 
 #### 2. POST `/predict_batch` (Carga Masiva)
 
-Sube un archivo `.csv` para obtener predicciones de múltiples clientes a la vez.
+Sube un archivo `.json` para obtener predicciones de múltiples clientes a la vez.
 
-**Requisitos del CSV:**
-- Debe contener encabezados compatibles (ej: `Geography`, `Age`, `CreditScore`, etc).
-- Se preservan las columnas originales del CSV en la respuesta.
+**Tipo de contenido**: `multipart/form-data`
+**Parámetro**: `file` (archivo `.json`)
 
-**Respuesta:**
-- Retorna JSON con la lista de objetos, donde cada objeto incluye los datos originales más `Prediction`, `Probability`, y `FeatureImportances` (ranking de impacto).
+**Requisitos del JSON:**
+- Debe ser una lista de objetos o un objeto único.
+- Debe contener las columnas requeridas (`Geography`, `Gender`, `Age`, `CreditScore`, `Balance`, `EstimatedSalary`, `Tenure`, `NumOfProducts`, `SatisfactionScore`, `IsActiveMember`, `HasCrCard`, `Complain`).
+- Puede contener columnas extra (ej. `ClienteID`, `Nombre`) que el modelo ignorará pero **se devolverán en la respuesta** para mantener la trazabilidad.
 
-- **Tipo de contenido**: `multipart/form-data`
-- **Parámetro**: `file` (archivo `.csv`)
-
-**Requisitos del CSV:**
-- Debe contener las columnas requeridas (`Geography`, `Gender`, `Age`, etc.).
-- Puede contener columnas extra (ej. `ID`, `Nombre`) que el modelo ignorará pero **se devolverán en la respuesta** para mantener la trazabilidad.
-
-**Respuesta Batch (Lista JSON):**
-Retorna un array de objetos, uno por fila del CSV, manteniendo el orden original.
+**Respuesta Batch (Objeto con propiedad "results"):**
+Retorna un objeto JSON con una propiedad `results` que contiene un array de objetos, uno por registro del JSON de entrada.
 
 ```json
-[
-  {
-    "ClienteID": 1001,
-    "Nombre": "Maria",
-    "Geography": "France",
-    ... (resto de columnas originales),
-    "Prediction": 1,
-    "Probability": 0.85,
-    "FeatureImportances": [
-       {"feature_name": "Age", "importance_value": 0.45, ...},
-       ...
-    ]
-  },
-  ...
-]
+{
+  "results": [
+    {
+      "ClienteID": 1001,
+      "Nombre": "Maria",
+      "Geography": "France",
+      "Gender": "Female",
+      "Age": 42,
+      "CreditScore": 619,
+      "Balance": 0.0,
+      "EstimatedSalary": 101348.88,
+      "Tenure": 2,
+      "NumOfProducts": 1,
+      "SatisfactionScore": 3,
+      "IsActiveMember": 1,
+      "HasCrCard": 1,
+      "Complain": 1,
+      "Prediction": 1,
+      "Probability": 0.85,
+      "FeatureImportances": [
+         {"feature_name": "Age", "importance_value": 0.45, "ranking": 1},
+         {"feature_name": "IsActiveMember", "importance_value": 0.42, "ranking": 2}
+      ]
+    },
+    {
+      "ClienteID": 1002,
+      "Nombre": "Juan",
+      "Geography": "Spain",
+      ... (resto de campos),
+      "Prediction": 0,
+      "Probability": 0.15,
+      "FeatureImportances": []
+    }
+  ]
+}
 ```
 
 ### Manejo de Errores
@@ -198,9 +212,9 @@ Esto correrá suite de pruebas ubicada en `api/test_app.py`.
 3. **`test_predict_churn_success_no_churn`**: Valida respuesta binaria `0` cuando el modelo predice no cancelación.
 4. **`test_predict_endpoint_validation_error`**: Asegura que payloads inválidos retornen 422.
 5. **`test_predict_endpoint_model_not_loaded`**: Valida manejo de errores si el modelo no carga.
-6. **`test_predict_batch_success`**: Verifica carga masiva CSV, preservación de columnas extra y anexado de predicciones.
+6. **`test_predict_batch_success`**: Verifica carga masiva JSON, preservación de columnas extra y anexado de predicciones en estructura "results".
 7. **`test_predict_batch_missing_columns`**: Valida error 400 si faltan columnas en el CSV.
-8. **`test_predict_batch_invalid_file_type`**: Valida rechazo de archivos que no sean `.csv`.
+8. **`test_predict_batch_invalid_file_type`**: Valida rechazo de archivos que no sean `.json`.
 
 #### Pruebas rápidas con `curl`
 
