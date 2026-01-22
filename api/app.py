@@ -1,6 +1,7 @@
 import pandas as pd
 import joblib
 import io
+import json
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -97,18 +98,26 @@ def predict_churn(data: CustomerRequest):
 @app.post("/predict_batch")
 async def predict_batch(file: UploadFile = File(...)):
     """
-    Procesa un archivo CSV con múltiples clientes y devuelve las predicciones detalladas.
+    Procesa un archivo JSON con múltiples clientes y devuelve las predicciones detalladas.
     """
     if not predictor:
         raise HTTPException(status_code=500, detail="Modelo no cargado.")
 
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="El archivo debe ser un CSV.")
+    if not file.filename.endswith('.json'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un JSON.")
 
     try:
         # Leer el contenido del archivo
         content = await file.read()
-        df = pd.read_csv(io.BytesIO(content))
+        data = json.loads(content.decode('utf-8'))
+        
+        # Convertir a DataFrame si es una lista de objetos
+        if isinstance(data, list):
+            df = pd.DataFrame(data)
+        elif isinstance(data, dict):
+            df = pd.DataFrame([data])
+        else:
+            raise ValueError("El JSON debe ser un objeto o una lista de objetos")
 
         # Columnas requeridas
         required_columns = {'Geography', 'Gender', 'Age', 'CreditScore', 'Balance', 
@@ -141,10 +150,10 @@ async def predict_batch(file: UploadFile = File(...)):
         df['FeatureImportances'] = [res['feature_importances'] for res in results]
 
         # Convertir a lista de diccionarios (JSON)
-        return df.to_dict(orient='records')
+        return {"results": df.to_dict(orient='records')}
 
     except HTTPException as he:
         raise he
     except Exception as e:
         print(f"Error procesando lote: {e}")
-        raise HTTPException(status_code=400, detail=f"Error al procesar el archivo CSV: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error al procesar el archivo JSON: {str(e)}")
