@@ -96,45 +96,48 @@ def test_predict_batch_success():
     """
     Prueba el endpoint de carga masiva (batch).
     Verifica:
-    1. Procesamiento correcto de JSON.
+    1. Procesamiento correcto de JSON con estructura {modelVersion, customers}.
     2. Preservación de columnas extra (ej: ClienteID).
     3. Anexado de Prediction y Probability en estructura "results".
     """
     import json
-    json_content = json.dumps([
-        {
-            "Geography": "France",
-            "Gender": "Female",
-            "Age": 42,
-            "CreditScore": 619,
-            "Balance": 0.0,
-            "EstimatedSalary": 101348.88,
-            "Tenure": 2,
-            "NumOfProducts": 1,
-            "SatisfactionScore": 3,
-            "IsActiveMember": 1,
-            "HasCrCard": 1,
-            "Complain": 1,
-            "ClienteID": 1001,
-            "Nombre": "Maria"
-        },
-        {
-            "Geography": "Spain",
-            "Gender": "Male",
-            "Age": 35,
-            "CreditScore": 600,
-            "Balance": 1000.0,
-            "EstimatedSalary": 50000.0,
-            "Tenure": 3,
-            "NumOfProducts": 2,
-            "SatisfactionScore": 4,
-            "IsActiveMember": 0,
-            "HasCrCard": 1,
-            "Complain": 0,
-            "ClienteID": 1002,
-            "Nombre": "Juan"
-        }
-    ])
+    json_content = json.dumps({
+        "modelVersion": "v1",
+        "customers": [
+            {
+                "Geography": "France",
+                "Gender": "Female",
+                "Age": 42,
+                "CreditScore": 619,
+                "Balance": 0.0,
+                "EstimatedSalary": 101348.88,
+                "Tenure": 2,
+                "NumOfProducts": 1,
+                "SatisfactionScore": 3,
+                "IsActiveMember": 1,
+                "HasCrCard": 1,
+                "Complain": 1,
+                "ClienteID": 1001,
+                "Nombre": "Maria"
+            },
+            {
+                "Geography": "Spain",
+                "Gender": "Male",
+                "Age": 35,
+                "CreditScore": 600,
+                "Balance": 1000.0,
+                "EstimatedSalary": 50000.0,
+                "Tenure": 3,
+                "NumOfProducts": 2,
+                "SatisfactionScore": 4,
+                "IsActiveMember": 0,
+                "HasCrCard": 1,
+                "Complain": 0,
+                "ClienteID": 1002,
+                "Nombre": "Juan"
+            }
+        ]
+    })
     
     # Crear archivo en simulado memoria
     files = {
@@ -185,9 +188,14 @@ def test_predict_batch_success():
         assert row2["Probability"] == 0.05
 
 def test_predict_batch_missing_columns():
-    """Prueba que le falten columnas requeridas al JSON"""
+    """Prueba que le falten columnas requeridas al JSON dentro de customers"""
     import json
-    json_content = json.dumps({"Geography": "France", "Gender": "Female"})
+    json_content = json.dumps({
+        "modelVersion": "v1",
+        "customers": [
+            {"Geography": "France", "Gender": "Female"}
+        ]
+    })
     files = {'file': ('test.json', io.BytesIO(json_content.encode()), 'application/json')}
     
     # No necesitamos mockear el modelo porque fallará antes

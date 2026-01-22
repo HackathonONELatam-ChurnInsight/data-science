@@ -144,9 +144,52 @@ Sube un archivo `.json` para obtener predicciones de múltiples clientes a la ve
 **Parámetro**: `file` (archivo `.json`)
 
 **Requisitos del JSON:**
-- Debe ser una lista de objetos o un objeto único.
-- Debe contener las columnas requeridas (`Geography`, `Gender`, `Age`, `CreditScore`, `Balance`, `EstimatedSalary`, `Tenure`, `NumOfProducts`, `SatisfactionScore`, `IsActiveMember`, `HasCrCard`, `Complain`).
+- Estructura requerida: debe tener `modelVersion` (string) y `customers` (array).
+- `customers` debe ser una lista de objetos con las columnas requeridas.
+- Cada objeto debe contener: `Geography`, `Gender`, `Age`, `CreditScore`, `Balance`, `EstimatedSalary`, `Tenure`, `NumOfProducts`, `SatisfactionScore`, `IsActiveMember`, `HasCrCard`, `Complain`.
 - Puede contener columnas extra (ej. `ClienteID`, `Nombre`) que el modelo ignorará pero **se devolverán en la respuesta** para mantener la trazabilidad.
+
+**Formato de entrada JSON:**
+
+```json
+{
+  "modelVersion": "v1",
+  "customers": [
+    {
+      "Geography": "France",
+      "Gender": "Female",
+      "Age": 42,
+      "CreditScore": 619,
+      "Balance": 0.0,
+      "EstimatedSalary": 101348.88,
+      "Tenure": 2,
+      "NumOfProducts": 1,
+      "SatisfactionScore": 3,
+      "IsActiveMember": 1,
+      "HasCrCard": 1,
+      "Complain": 1,
+      "ClienteID": 1001,
+      "Nombre": "Maria"
+    },
+    {
+      "Geography": "Spain",
+      "Gender": "Male",
+      "Age": 35,
+      "CreditScore": 600,
+      "Balance": 1000.0,
+      "EstimatedSalary": 50000.0,
+      "Tenure": 3,
+      "NumOfProducts": 2,
+      "SatisfactionScore": 4,
+      "IsActiveMember": 0,
+      "HasCrCard": 1,
+      "Complain": 0,
+      "ClienteID": 1002,
+      "Nombre": "Juan"
+    }
+  ]
+}
+```
 
 **Respuesta Batch (Objeto con propiedad "results"):**
 Retorna un objeto JSON con una propiedad `results` que contiene un array de objetos, uno por registro del JSON de entrada.

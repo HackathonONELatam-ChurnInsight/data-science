@@ -111,13 +111,17 @@ async def predict_batch(file: UploadFile = File(...)):
         content = await file.read()
         data = json.loads(content.decode('utf-8'))
         
-        # Convertir a DataFrame si es una lista de objetos
-        if isinstance(data, list):
-            df = pd.DataFrame(data)
-        elif isinstance(data, dict):
-            df = pd.DataFrame([data])
-        else:
-            raise ValueError("El JSON debe ser un objeto o una lista de objetos")
+        # Validar estructura: debe tener "customers" y opcionalmente "modelVersion"
+        if not isinstance(data, dict) or 'customers' not in data:
+            raise ValueError("El JSON debe tener estructura {\"modelVersion\": \"v1\", \"customers\": [...]}") 
+        
+        customers_list = data['customers']
+        
+        if not isinstance(customers_list, list):
+            raise ValueError("La propiedad 'customers' debe ser una lista de objetos")
+        
+        # Convertir a DataFrame
+        df = pd.DataFrame(customers_list)
 
         # Columnas requeridas
         required_columns = {'Geography', 'Gender', 'Age', 'CreditScore', 'Balance', 
