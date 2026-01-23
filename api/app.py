@@ -9,6 +9,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import os
 import sys
 from api.churn_logic import ChurnPredictor # Importamos la nueva lógica
+from typing import List, Optional
 
 # Importar función utilitaria requerida por el modelo (Mantener por compatibilidad de joblib)
 try:
@@ -68,6 +69,10 @@ app = FastAPI(title="Churn Insight API", version="1.0")
 @app.get("/")
 def main():
     return RedirectResponse(url="/docs")
+    
+class CustomerBatchRequest(BaseModel):
+    modelVersion: Optional[str] = "v1"
+    customers: List[CustomerRequest]
 
 # --- 4. ENDPOINT ---
 @app.post("/predict")
@@ -96,68 +101,37 @@ def predict_churn(data: CustomerRequest):
 
 # --- 5. ENDPOINT BATCH ---
 @app.post("/predict_batch")
-async def predict_batch(file: UploadFile = File(...)):
+def predict_batch(data: CustomerBatchRequest):
     """
-    Procesa un archivo JSON con múltiples clientes y devuelve las predicciones detalladas.
+    Procesa un JSON con múltiples clientes y devuelve las predicciones detalladas.
     """
     if not predictor:
         raise HTTPException(status_code=500, detail="Modelo no cargado.")
 
-    if not file.filename.endswith('.json'):
-        raise HTTPException(status_code=400, detail="El archivo debe ser un JSON.")
-
     try:
-        # Leer el contenido del archivo
-        content = await file.read()
-        data = json.loads(content.decode('utf-8'))
-        
-        # Validar estructura: debe tener "customers" y opcionalmente "modelVersion"
-        if not isinstance(data, dict) or 'customers' not in data:
-            raise ValueError("El JSON debe tener estructura {\"modelVersion\": \"v1\", \"customers\": [...]}") 
-        
-        customers_list = data['customers']
-        
-        if not isinstance(customers_list, list):
-            raise ValueError("La propiedad 'customers' debe ser una lista de objetos")
-        
-        # Convertir a DataFrame
-        df = pd.DataFrame(customers_list)
+        # Convertir clientes a DataFrame
+        df = pd.DataFrame([c.model_dump() for c in data.customers])
 
-        # Columnas requeridas
-        required_columns = {'Geography', 'Gender', 'Age', 'CreditScore', 'Balance', 
-                            'EstimatedSalary', 'Tenure', 'NumOfProducts', 'SatisfactionScore', 
-                            'IsActiveMember', 'HasCrCard', 'Complain'}
-
-        # Validar columnas faltantes
-        if not required_columns.issubset(df.columns):
-            missing = required_columns - set(df.columns)
-            raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en el CSV: {missing}")
-
-        # Aplicar FeatureGenerator (Limpieza de datos: Título)
+        # Aplicar FeatureGenerator
         feat_gen = FeatureGenerator()
         df = feat_gen.transform(df)
 
-        # Realizar predicciones
+        # Predicciones
         results = []
-        df_dict = df.to_dict(orient='records')
-        
-        for record in df_dict:
-            # Procesamos uno por uno para obtener el detalle de SHAP
-            # (Esto puede ser lento para archivos grandes, pero garantiza el contrato completo)
+        for record in df.to_dict(orient="records"):
             pred = predictor.predict(record)
             results.append(pred)
 
-        # Anexar resultados al DataFrame ORIGINAL
-        df['Prediction'] = [res['forecast'] for res in results]
-        df['Probability'] = [res['probability'] for res in results]
-        # Guardamos el JSON de importancias como string o estructura
-        df['FeatureImportances'] = [res['feature_importances'] for res in results]
+        # Enriquecer resultados
+        df['forecast'] = [r['forecast'] for r in results]
+        df['probability'] = [r['probability'] for r in results]
+        df['feature_importances'] = [r['feature_importances'] for r in results]
 
-        # Convertir a lista de diccionarios (JSON)
-        return {"results": df.to_dict(orient='records')}
+        return {
+            "modelVersion": data.modelVersion,
+            "results": df.to_dict(orient="records")
+        }
 
-    except HTTPException as he:
-        raise he
     except Exception as e:
         print(f"Error procesando lote: {e}")
-        raise HTTPException(status_code=400, detail=f"Error al procesar el archivo JSON: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
