@@ -212,11 +212,11 @@ Retorna un objeto JSON con una propiedad `results` que contiene un array de obje
       "IsActiveMember": 1,
       "HasCrCard": 1,
       "Complain": 1,
-      "Prediction": 1,
-      "Probability": 0.85,
-      "FeatureImportances": [
-         {"feature_name": "Age", "importance_value": 0.45, "ranking": 1},
-         {"feature_name": "IsActiveMember", "importance_value": 0.42, "ranking": 2}
+      "forecast": 1,
+      "probability": 0.85,
+      "feature_importances": [
+         {"feature_name": "Age", "feature_value": 42, "importance_value": 0.45, "ranking": 1},
+         {"feature_name": "IsActiveMember", "feature_value": 1, "importance_value": 0.42, "ranking": 2}
       ]
     },
     {
@@ -224,9 +224,9 @@ Retorna un objeto JSON con una propiedad `results` que contiene un array de obje
       "Nombre": "Juan",
       "Geography": "Spain",
       ... (resto de campos),
-      "Prediction": 0,
-      "Probability": 0.15,
-      "FeatureImportances": []
+      "forecast": 0,
+      "probability": 0.15,
+      "feature_importances": []
     }
   ]
 }
