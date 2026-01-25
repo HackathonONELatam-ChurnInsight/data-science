@@ -1,10 +1,18 @@
 # [Nombre del Proyecto de Hackathon]
 
-**Equipo:** [Nombre del Equipo]
-- [Miembro 1]
-- [Miembro 2]
-- [Miembro 3]
-
+**Equipo:** HoldOn Data Labs
+- Claudia Ximena Delgado Gutiérrez 
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:cid2024sec@gmail.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/claudiax-delgado)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ClaudiaXDG)
+- Felipe Octavio Rebolledo
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:felipe.rebolledo.robert@gmail.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/felipe-rebolledo-robert/)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/FelipeOctavio87)
+- Nicolas Ruiz
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:nruizb14@gmail.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/nicolas-ruiz-953323302)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Noirwolf04)
 ---
 
 ## 📂 Estructura del Proyecto
@@ -31,18 +39,53 @@ A continuación se detalla la organización de archivos y el propósito de cada 
 
 ## 🏆 Entregable Principal (Notebooks)
 
-Para ver el análisis exploratorio, ingeniería de features y métricas del modelo detalladas, accede al notebook principal:
+Para ver el análisis exploratorio, ingeniería de features y métricas del modelo detalladas, accede a los notebooks:
 
-👉 [**Ir al Notebook de Entrenamiento**](notebook/) *(Enlace pendiente de notebook específico)*
+👉 [**MVP Churn Insight (Unificado)**](notebook/MVP_ChurnInsight_Notebook_Unificado.ipynb)
 
 ---
 
 ## 📊 Resumen Técnico
 
-- **Modelo Elegido**: Regresión Logística con Calibración de Probabilidades y SMOTE para balanceo de clases.
-- **Explicabilidad**: Incorporamos valores SHAP en la API para explicar *por qué* se toma cada decisión a nivel de cliente.
-- **Métricas Clave (Notebook)**:
-    - *Consultar el notebook para los valores exactos, dado que se generan dinámicamente.*
+### Modelo y Metodología
+
+- **Algoritmo Base**: Regresión Logística con regularización L2.
+- **Manejo del Desbalance**: SMOTE (Synthetic Minority Oversampling Technique) para generar datos sintéticos en la clase minoritaria.
+- **Calibración**: Modelo calibrado con método Sigmoid (`CalibratedClassifierCV`) para asegurar probabilidades confiables.
+- **Umbral de Decisión Optimizado**: Selección de umbral basada en maximización de F1-Score mediante Precision-Recall curve (umbral calibrado: ~0.22).
+
+### Ingeniería de Características
+
+**Variables Numéricas (5)**:
+- `CreditScore`, `Age`, `Balance`, `EstimatedSalary`, `Tenure`
+- Tratamiento: Imputación simple + escalado StandardScaler
+
+**Variables Categóricas (2)**:
+- `Geography` (Francia, España, Alemania)
+- `Gender` (Masculino, Femenino)
+- Tratamiento: Imputación + One-Hot Encoding con K-1 dummies para evitar colinealidad
+
+**Variables Binarias (4)**:
+- `HasCrCard`, `IsActiveMember`, `Complain`, `NumOfProducts` (convertida a binaria)
+- Tratamiento: Conversión a tipo int + imputación
+
+### Análisis de Multicolinealidad
+
+- Cálculo de **Factor de Inflación de Varianza (VIF)** sobre matriz de entrenamiento post-preprocesamiento.
+- Resultado: Valores de VIF cercanos a 1, indicando **ausencia de multicolinealidad relevante**.
+
+### Búsqueda de Hiperparámetros
+
+- **Método**: GridSearchCV con validación cruzada estratificada (5-fold, StratifiedKFold).
+- **Parámetro sintonizado**: `C` (inversa de la fuerza de regularización) en escala logarítmica.
+- **Rango explorado**: `[0.001, 0.01, 0.1, 1, 10, 100, 1000]`.
+- **Métrica de Optimización**: ROC-AUC.
+
+### Explicabilidad (SHAP)
+
+- **Explainer**: SHAP Linear Explainer basado en el modelo de Regresión Logística calibrado.
+- **Agregación**: SHAP values se agregan por feature original, unificando los dummies one-hot encoded bajo su categoría madre.
+- **Aplicación**: Ranking de importancia de features para cada predicción individual en la API.
 
 ---
 
