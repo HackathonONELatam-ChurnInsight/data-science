@@ -1,4 +1,4 @@
-# [Nombre del Proyecto de Hackathon]
+# ChurnInsight
 
 **Equipo:** HoldOn Data Labs
 - Claudia Ximena Delgado Gutiérrez 
